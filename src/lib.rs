@@ -1,19 +1,18 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{IntoMakeService, post};
+use axum::routing::post;
 use axum::{Extension, Json, Router};
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use tracing::{debug, error, warn};
 
-pub fn deploy_router(repo: &str, service: &str) -> IntoMakeService<Router> {
+pub fn deploy_router(repo: &str, service: &str) -> Router {
     Router::new()
         .route("/deploy", post(deploy_post))
         .layer(Extension(DeployConfig {
             repo: repo.into(),
             service: service.into(),
         }))
-        .into_make_service()
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
