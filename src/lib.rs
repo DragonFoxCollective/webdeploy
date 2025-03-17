@@ -47,7 +47,7 @@ impl IntoResponse for Error {
 }
 
 async fn deploy_post(
-    config: Extension<DeployConfig>,
+    Extension(config): Extension<DeployConfig>,
     Json(deploy): Json<Deploy>,
 ) -> Result<impl IntoResponse, Error> {
     warn!("Deploying {}", deploy.repository.name);
