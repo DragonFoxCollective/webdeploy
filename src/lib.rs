@@ -1,5 +1,5 @@
 use std::process::Stdio;
-use tokio::io::{AsyncReadExt as _, BufReader};
+use tokio::io::{AsyncBufReadExt as _, AsyncReadExt as _, BufReader};
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -63,21 +63,30 @@ async fn deploy_post(
     let mut ssh_agent = Command::new("ssh-agent")
         .arg("-s")
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
         .spawn()?;
     if let Some(stdout) = ssh_agent.stdout.take() {
-        let mut output = String::new();
-        let mut reader = BufReader::new(stdout);
-        reader.read_to_string(&mut output).await?;
-        info!("SSH: {:?}", output);
+        let reader = BufReader::new(stdout);
+        let mut lines = reader.lines();
+        while let Some(line) = lines.next_line().await? {
+            info!("SSH: {:?}", line);
+        }
     }
 
-    let pull_output = Command::new("git")
+    let mut pull_output = String::new();
+    let mut pull_command = Command::new("git")
         .arg("pull")
         .current_dir(dir.clone())
-        .output()
-        .await?;
-    info!("PULL: {:?}", pull_output);
+        .stdout(Stdio::piped())
+        .spawn()?;
+    if let Some(stdout) = pull_command.stdout.take() {
+        let reader = BufReader::new(stdout);
+        let mut lines = reader.lines();
+        while let Some(line) = lines.next_line().await? {
+            info!("PULL: {:?}", line);
+            pull_output += &line;
+        }
+    }
+    pull_command.wait().await?;
 
     if let Some(pid) = ssh_agent.id() {
         info!(
@@ -90,19 +99,25 @@ async fn deploy_post(
         );
     }
 
-    if is_sub(pull_output.stdout.as_ref(), b"Already up to date.") {
+    if is_sub(pull_output.as_ref(), b"Already up to date.") {
         return Ok("Already up to date");
     }
 
-    info!(
-        "BUILD: {:?}",
-        Command::new("cargo")
-            .arg("build")
-            .arg("--release")
-            .current_dir(dir)
-            .output()
-            .await?
-    );
+    let mut build_command = Command::new("cargo")
+        .arg("build")
+        .arg("--release")
+        .current_dir(dir)
+        .stdout(Stdio::piped())
+        .spawn()?;
+    if let Some(stdout) = build_command.stdout.take() {
+        let reader = BufReader::new(stdout);
+        let mut lines = reader.lines();
+        while let Some(line) = lines.next_line().await? {
+            info!("BUILD: {:?}", line);
+        }
+    }
+    build_command.wait().await?;
+
     info!(
         "RESTART: {:?}",
         Command::new("systemctl")
