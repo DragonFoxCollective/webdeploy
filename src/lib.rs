@@ -53,10 +53,10 @@ async fn deploy_post(
     Extension(config): Extension<DeployConfig>,
     Json(deploy): Json<Deploy>,
 ) -> Result<impl IntoResponse, Error> {
-    info!("Deploying {}", deploy.repository.name);
-    let dir = if deploy.repository.name == config.repo {
-        format!("/var/www/{}", config.repo)
-    } else {
+    let dir = format!("/var/www/{}", config.repo);
+    info!("Deploying {} in {}", deploy.repository.name, dir);
+
+    if deploy.repository.name != config.repo {
         return Err(Error::WrongRepo(deploy.repository.name));
     };
 
@@ -69,7 +69,7 @@ async fn deploy_post(
         let mut output = String::new();
         let mut reader = BufReader::new(stdout);
         reader.read_to_string(&mut output).await?;
-        info!("{:?}", ssh_agent.stdout.take());
+        info!("{:?}", output);
     }
 
     info!("{:?}", Command::new("cd").arg(dir.clone()).output().await?);
