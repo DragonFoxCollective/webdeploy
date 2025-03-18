@@ -4,7 +4,7 @@ use axum::routing::post;
 use axum::{Extension, Json, Router};
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
-use tracing::{debug, error, warn};
+use tracing::{error, info};
 
 pub fn deploy_router(repo: &str, service: &str) -> Router {
     Router::new()
@@ -50,21 +50,21 @@ async fn deploy_post(
     Extension(config): Extension<DeployConfig>,
     Json(deploy): Json<Deploy>,
 ) -> Result<impl IntoResponse, Error> {
-    warn!("Deploying {}", deploy.repository.name);
+    info!("Deploying {}", deploy.repository.name);
     let dir = if deploy.repository.name == config.repo {
         format!("/var/www/{}", config.repo)
     } else {
         return Err(Error::WrongRepo(deploy.repository.name));
     };
 
-    debug!(
+    info!(
         "{:?}",
         Command::new("eval").arg("`ssh-agent`").output().await?
     );
-    debug!("{:?}", Command::new("cd").arg(dir.clone()).output().await?);
+    info!("{:?}", Command::new("cd").arg(dir.clone()).output().await?);
     let pull_output = Command::new("git").arg("pull").output().await?;
-    debug!("{:?}", pull_output);
-    debug!(
+    info!("{:?}", pull_output);
+    info!(
         "{:?}",
         Command::new("kill").arg("$SSH_AGENT_PID").output().await?
     );
@@ -73,7 +73,7 @@ async fn deploy_post(
         return Ok("Already up to date");
     }
 
-    debug!(
+    info!(
         "{:?}",
         Command::new("cargo")
             .arg("build")
@@ -82,7 +82,7 @@ async fn deploy_post(
             .output()
             .await?
     );
-    debug!(
+    info!(
         "{:?}",
         Command::new("systemctl")
             .arg("restart")
