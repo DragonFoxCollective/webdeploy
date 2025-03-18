@@ -1,3 +1,6 @@
+use std::process::Stdio;
+use tokio::io::{AsyncReadExt as _, BufReader};
+
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
@@ -57,17 +60,32 @@ async fn deploy_post(
         return Err(Error::WrongRepo(deploy.repository.name));
     };
 
-    info!(
-        "{:?}",
-        Command::new("eval").arg("$(ssh-agent)").output().await?
-    );
+    let mut ssh_agent = Command::new("ssh-agent")
+        .arg("-s")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    if let Some(stdout) = ssh_agent.stdout.take() {
+        let mut output = String::new();
+        let mut reader = BufReader::new(stdout);
+        reader.read_to_string(&mut output).await?;
+        info!("{:?}", ssh_agent.stdout.take());
+    }
+
     info!("{:?}", Command::new("cd").arg(dir.clone()).output().await?);
     let pull_output = Command::new("git").arg("pull").output().await?;
     info!("{:?}", pull_output);
-    info!(
-        "{:?}",
-        Command::new("kill").arg("$SSH_AGENT_PID").output().await?
-    );
+
+    if let Some(pid) = ssh_agent.id() {
+        info!(
+            "{:?}",
+            Command::new("kill")
+                .arg("-9")
+                .arg(pid.to_string())
+                .output()
+                .await?
+        );
+    }
 
     if is_sub(pull_output.stdout.as_ref(), b"Already up to date.") {
         return Ok("Already up to date");
