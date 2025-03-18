@@ -72,11 +72,11 @@ async fn deploy_post(
         info!("SSH: {:?}", output);
     }
 
-    info!(
-        "CD: {:?}",
-        Command::new("cd").arg(dir.clone()).output().await?
-    );
-    let pull_output = Command::new("git").arg("pull").output().await?;
+    let pull_output = Command::new("git")
+        .arg("pull")
+        .current_dir(dir.clone())
+        .output()
+        .await?;
     info!("PULL: {:?}", pull_output);
 
     if let Some(pid) = ssh_agent.id() {
