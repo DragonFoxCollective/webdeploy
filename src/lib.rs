@@ -59,7 +59,7 @@ async fn deploy_post(
 
     info!(
         "{:?}",
-        Command::new("eval").arg("`ssh-agent`").output().await?
+        Command::new("eval").arg("$(ssh-agent)").output().await?
     );
     info!("{:?}", Command::new("cd").arg(dir.clone()).output().await?);
     let pull_output = Command::new("git").arg("pull").output().await?;
