@@ -54,7 +54,7 @@ async fn deploy_post(
     Json(deploy): Json<Deploy>,
 ) -> Result<impl IntoResponse, Error> {
     let dir = format!("/var/www/{}", config.repo);
-    info!("Deploying {} in {}", deploy.repository.name, dir);
+    info!("Deploying '{}' in '{}'", deploy.repository.name, dir);
 
     if deploy.repository.name != config.repo {
         return Err(Error::WrongRepo(deploy.repository.name));
