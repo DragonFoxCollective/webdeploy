@@ -69,16 +69,19 @@ async fn deploy_post(
         let mut output = String::new();
         let mut reader = BufReader::new(stdout);
         reader.read_to_string(&mut output).await?;
-        info!("{:?}", output);
+        info!("SSH: {:?}", output);
     }
 
-    info!("{:?}", Command::new("cd").arg(dir.clone()).output().await?);
+    info!(
+        "CD: {:?}",
+        Command::new("cd").arg(dir.clone()).output().await?
+    );
     let pull_output = Command::new("git").arg("pull").output().await?;
-    info!("{:?}", pull_output);
+    info!("PULL: {:?}", pull_output);
 
     if let Some(pid) = ssh_agent.id() {
         info!(
-            "{:?}",
+            "KILL: {:?}",
             Command::new("kill")
                 .arg("-9")
                 .arg(pid.to_string())
@@ -92,7 +95,7 @@ async fn deploy_post(
     }
 
     info!(
-        "{:?}",
+        "BUILD: {:?}",
         Command::new("cargo")
             .arg("build")
             .arg("--release")
@@ -101,7 +104,7 @@ async fn deploy_post(
             .await?
     );
     info!(
-        "{:?}",
+        "RESTART: {:?}",
         Command::new("systemctl")
             .arg("restart")
             .arg(config.service.clone())
