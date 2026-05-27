@@ -2,13 +2,13 @@ use std::path::Path;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt as _, BufReader};
 
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use awesome_axum_responses::*;
+use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Json, Router};
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
-use tracing::{error, info};
+use tracing::info;
 
 pub fn deploy_router(
     repo: impl Into<String>,
@@ -41,65 +41,32 @@ struct DeployRepo {
     name: String,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("tried to deploy a different repo: {0}")]
-    WrongRepo(String),
-    #[error("io error: {0}")]
-    IO(#[from] std::io::Error),
-    #[error("cargo not found")]
-    CargoNotFound,
-    #[error("repo dir '{0}' not found")]
-    RepoDirNotFound(String),
-    #[error("repo dir '{0}' isn't a directory")]
-    RepoDirNotDirectory(String),
-    #[error("ssh-agent not found")]
-    SshAgentNotFound,
-    #[error("git not found")]
-    GitNotFound,
-    #[error("systemctl not found")]
-    SystemCtlNotFound,
-}
-
-impl IntoResponse for Error {
-    fn into_response(self) -> Response {
-        error!(err = ?self, "responding with error");
-        (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()).into_response()
-    }
-}
-
 async fn deploy_post(
     Extension(config): Extension<DeployConfig>,
     Json(deploy): Json<Deploy>,
-) -> Result<impl IntoResponse, Error> {
+) -> Result<impl IntoResponse> {
     info!("Deploying '{}' in '{}'", deploy.repository.name, config.dir);
 
     if deploy.repository.name != config.repo {
-        return Err(Error::WrongRepo(deploy.repository.name));
+        return Err(anyhow!(
+            "tried to deploy the wrong repo '{}' on '{}'",
+            deploy.repository.name,
+            config.repo
+        )
+        .into());
     }
     if !Path::new(&config.dir).exists() {
-        return Err(Error::RepoDirNotFound(config.dir));
+        return Err(anyhow!("repository directory doesn't exist").into());
     }
     if !Path::new(&config.dir).is_dir() {
-        return Err(Error::RepoDirNotDirectory(config.dir));
-    }
-    if !Path::new("cargo").exists() {
-        return Err(Error::CargoNotFound);
-    }
-    if !Path::new("ssh-agent").exists() {
-        return Err(Error::SshAgentNotFound);
-    }
-    if !Path::new("git").exists() {
-        return Err(Error::GitNotFound);
-    }
-    if !Path::new("systemctl").exists() {
-        return Err(Error::SystemCtlNotFound);
+        return Err(anyhow!("repository directory isn't a directory").into());
     }
 
     let mut ssh_agent = Command::new("ssh-agent")
         .arg("-s")
         .stdout(Stdio::piped())
-        .spawn()?;
+        .spawn()
+        .map_err(|e| anyhow!("err running ssh-agent: {e}"))?;
     if let Some(stdout) = ssh_agent.stdout.take() {
         let reader = BufReader::new(stdout);
         let mut lines = reader.lines();
@@ -113,7 +80,8 @@ async fn deploy_post(
         .arg("pull")
         .current_dir(&config.dir)
         .stdout(Stdio::piped())
-        .spawn()?;
+        .spawn()
+        .map_err(|e| anyhow!("err running git pull: {e}"))?;
     if let Some(stdout) = pull_command.stdout.take() {
         let reader = BufReader::new(stdout);
         let mut lines = reader.lines();
@@ -131,7 +99,8 @@ async fn deploy_post(
                 .arg("-9")
                 .arg(pid.to_string())
                 .output()
-                .await?
+                .await
+                .map_err(|e| anyhow!("err running kill ssh-agent: {e}"))?
         );
     }
 
@@ -144,7 +113,8 @@ async fn deploy_post(
         .arg("--release")
         .current_dir(&config.dir)
         .stdout(Stdio::piped())
-        .spawn()?;
+        .spawn()
+        .map_err(|e| anyhow!("err running cargo build: {e}"))?;
     if let Some(stdout) = build_command.stdout.take() {
         let reader = BufReader::new(stdout);
         let mut lines = reader.lines();
@@ -160,7 +130,8 @@ async fn deploy_post(
             .arg("restart")
             .arg(&config.service)
             .output()
-            .await?
+            .await
+            .map_err(|e| anyhow!("err running systemctl restart: {e}"))?
     );
     Ok("Deployed")
 }
