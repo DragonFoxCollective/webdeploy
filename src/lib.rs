@@ -9,12 +9,17 @@ use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use tracing::{error, info};
 
-pub fn deploy_router(repo: &str, service: &str) -> Router {
+pub fn deploy_router(
+    repo: impl Into<String>,
+    service: impl Into<String>,
+    dir: impl Into<String>,
+) -> Router {
     Router::new()
         .route("/deploy", post(deploy_post))
         .layer(Extension(DeployConfig {
             repo: repo.into(),
             service: service.into(),
+            dir: dir.into(),
         }))
 }
 
@@ -22,6 +27,7 @@ pub fn deploy_router(repo: &str, service: &str) -> Router {
 struct DeployConfig {
     repo: String,
     service: String,
+    dir: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -53,8 +59,7 @@ async fn deploy_post(
     Extension(config): Extension<DeployConfig>,
     Json(deploy): Json<Deploy>,
 ) -> Result<impl IntoResponse, Error> {
-    let dir = format!("/var/www/{}", config.repo);
-    info!("Deploying '{}' in '{}'", deploy.repository.name, dir);
+    info!("Deploying '{}' in '{}'", deploy.repository.name, config.dir);
 
     if deploy.repository.name != config.repo {
         return Err(Error::WrongRepo(deploy.repository.name));
@@ -75,7 +80,7 @@ async fn deploy_post(
     let mut pull_output = String::new();
     let mut pull_command = Command::new("git")
         .arg("pull")
-        .current_dir(dir.clone())
+        .current_dir(config.dir.clone())
         .stdout(Stdio::piped())
         .spawn()?;
     if let Some(stdout) = pull_command.stdout.take() {
@@ -106,7 +111,7 @@ async fn deploy_post(
     let mut build_command = Command::new("cargo")
         .arg("build")
         .arg("--release")
-        .current_dir(dir)
+        .current_dir(config.dir)
         .stdout(Stdio::piped())
         .spawn()?;
     if let Some(stdout) = build_command.stdout.take() {
