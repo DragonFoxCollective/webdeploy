@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt as _, BufReader};
 
@@ -46,6 +47,18 @@ pub enum Error {
     WrongRepo(String),
     #[error("io error: {0}")]
     IO(#[from] std::io::Error),
+    #[error("cargo not found")]
+    CargoNotFound,
+    #[error("repo dir '{0}' not found")]
+    RepoDirNotFound(String),
+    #[error("repo dir '{0}' isn't a directory")]
+    RepoDirNotDirectory(String),
+    #[error("ssh-agent not found")]
+    SshAgentNotFound,
+    #[error("git not found")]
+    GitNotFound,
+    #[error("systemctl not found")]
+    SystemCtlNotFound,
 }
 
 impl IntoResponse for Error {
@@ -63,7 +76,25 @@ async fn deploy_post(
 
     if deploy.repository.name != config.repo {
         return Err(Error::WrongRepo(deploy.repository.name));
-    };
+    }
+    if !Path::new(&config.dir).exists() {
+        return Err(Error::RepoDirNotFound(config.dir));
+    }
+    if !Path::new(&config.dir).is_dir() {
+        return Err(Error::RepoDirNotDirectory(config.dir));
+    }
+    if !Path::new("cargo").exists() {
+        return Err(Error::CargoNotFound);
+    }
+    if !Path::new("ssh-agent").exists() {
+        return Err(Error::SshAgentNotFound);
+    }
+    if !Path::new("git").exists() {
+        return Err(Error::GitNotFound);
+    }
+    if !Path::new("systemctl").exists() {
+        return Err(Error::SystemCtlNotFound);
+    }
 
     let mut ssh_agent = Command::new("ssh-agent")
         .arg("-s")
