@@ -104,7 +104,7 @@ async fn deploy_post(
         );
     }
 
-    if is_sub(pull_output.as_ref(), b"Already up to date.") {
+    if !cfg!(feature = "always-build") && is_sub(pull_output.as_ref(), b"Already up to date.") {
         return Ok("Already up to date");
     }
 
