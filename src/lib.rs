@@ -80,7 +80,7 @@ async fn deploy_post(
     let mut pull_output = String::new();
     let mut pull_command = Command::new("git")
         .arg("pull")
-        .current_dir(config.dir.clone())
+        .current_dir(&config.dir)
         .stdout(Stdio::piped())
         .spawn()?;
     if let Some(stdout) = pull_command.stdout.take() {
@@ -111,7 +111,7 @@ async fn deploy_post(
     let mut build_command = Command::new("cargo")
         .arg("build")
         .arg("--release")
-        .current_dir(config.dir)
+        .current_dir(&config.dir)
         .stdout(Stdio::piped())
         .spawn()?;
     if let Some(stdout) = build_command.stdout.take() {
@@ -127,7 +127,7 @@ async fn deploy_post(
         "RESTART: {:?}",
         Command::new("systemctl")
             .arg("restart")
-            .arg(config.service.clone())
+            .arg(&config.service)
             .output()
             .await?
     );
