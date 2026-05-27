@@ -104,7 +104,8 @@ async fn deploy_post(
         );
     }
 
-    if !cfg!(feature = "always-build") && is_sub(pull_output.as_ref(), b"Already up to date.") {
+    #[cfg(not(feature = "always-build"))]
+    if is_sub(pull_output.as_ref(), b"Already up to date.") {
         return Ok("Already up to date");
     }
 
@@ -124,6 +125,7 @@ async fn deploy_post(
     }
     build_command.wait().await?;
 
+    #[cfg(not(feature = "user-service"))]
     info!(
         "RESTART: {:?}",
         Command::new("systemctl")
@@ -133,9 +135,22 @@ async fn deploy_post(
             .await
             .map_err(|e| anyhow!("err running systemctl restart: {e}"))?
     );
+    #[cfg(feature = "user-service")]
+    info!(
+        "RESTART: {:?}",
+        Command::new("systemctl")
+            .arg("--user")
+            .arg("restart")
+            .arg(&config.service)
+            .output()
+            .await
+            .map_err(|e| anyhow!("err running systemctl restart: {e}"))?
+    );
+
     Ok("Deployed")
 }
 
+#[cfg(not(feature = "always-build"))]
 fn is_sub<T: PartialEq>(haystack: &[T], needle: &[T]) -> bool {
     haystack.windows(needle.len()).any(|c| c == needle)
 }
