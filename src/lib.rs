@@ -154,3 +154,27 @@ async fn deploy_post(
 fn is_sub<T: PartialEq>(haystack: &[T], needle: &[T]) -> bool {
     haystack.windows(needle.len()).any(|c| c == needle)
 }
+
+pub async fn graceful_shutdown() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+}
